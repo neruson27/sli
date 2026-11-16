@@ -5,6 +5,8 @@ pub mod system_controller;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
 
 use crate::antigravity_watcher::{
@@ -71,6 +73,75 @@ pub fn state_to_payload(state: &AntigravityState) -> AntigravityStatePayload {
             prompt: Some(prompt.clone()),
         },
     }
+}
+
+pub fn create_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let status_item = MenuItem::with_id(app, "status", "💧 Sli: Listo (Gemini 3.8 Flash)", false, None::<&str>)?;
+    let _ = status_item.set_text("💧 Sli: Listo");
+    let toggle_float_item = MenuItem::with_id(app, "toggle_float", "👁️ Mostrar / Ocultar Sli", true, None::<&str>)?;
+    let open_chat_item = MenuItem::with_id(app, "open_chat", "💬 Abrir Chat con Sli", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "🚪 Salir de Sli", true, None::<&str>)?;
+
+    let menu = Menu::with_items(app, &[&status_item, &toggle_float_item, &open_chat_item, &quit_item])?;
+
+    let icon = app.default_window_icon().cloned().ok_or("No default window icon found")?;
+
+    let _tray = TrayIconBuilder::new()
+        .icon(icon)
+        .tooltip("Sli - Desktop Companion")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(move |app, event| {
+            match event.id.as_ref() {
+                "toggle_float" => {
+                    if let Some(main) = app.get_webview_window("main") {
+                        let is_visible = main.is_visible().unwrap_or(false);
+                        if is_visible {
+                            let _ = main.hide();
+                        } else {
+                            let _ = main.show();
+                            let _ = main.set_focus();
+                        }
+                    }
+                }
+                "open_chat" => {
+                    if let Some(main) = app.get_webview_window("main") {
+                        let _ = main.hide();
+                    }
+                    if let Some(dash) = app.get_webview_window("dashboard") {
+                        let _ = dash.show();
+                        let _ = dash.set_focus();
+                        let _ = dash.emit("switch-tab", "tab-chat");
+                    }
+                }
+                "quit" => {
+                    app.exit(0);
+                }
+                _ => {}
+            }
+        })
+        .on_tray_icon_event(move |tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let app = tray.app_handle();
+                if let Some(main) = app.get_webview_window("main") {
+                    let is_visible = main.is_visible().unwrap_or(false);
+                    if is_visible {
+                        let _ = main.hide();
+                    } else {
+                        let _ = main.show();
+                        let _ = main.set_focus();
+                    }
+                }
+            }
+        })
+        .build(app)?;
+
+    Ok(())
 }
 
 /// Core function returning the current `AntigravityState` from `AppState`.
@@ -479,6 +550,9 @@ pub fn run() {
             if let Some(main) = app.get_webview_window("main") {
                 let _ = main.show();
             }
+
+            // Initialize System Tray Icon
+            let _ = create_tray(&handle);
 
             let app_cmd = handle.clone();
             let state_cmd = app_state_clone.clone();

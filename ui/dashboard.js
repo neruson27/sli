@@ -236,6 +236,13 @@ class DashboardApp {
           }
         }
       });
+
+      tauri.event.listen('switch-tab', (event) => {
+        const tabId = event.payload;
+        if (tabId) {
+          this.switchTab(tabId);
+        }
+      });
     }
   }
 
