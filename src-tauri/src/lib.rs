@@ -293,17 +293,30 @@ pub mod commands {
         let next = !current;
         state.dashboard_visible.store(next, Ordering::SeqCst);
 
-        if let Some(win) = app.get_webview_window("dashboard") {
+        let app_clone = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let main_win = app_clone.get_webview_window("main");
+            let dash_win = app_clone.get_webview_window("dashboard");
+
             if next {
-                let _ = win.show();
-                let _ = win.set_focus();
+                if let Some(main) = main_win {
+                    let _ = main.hide();
+                }
+                if let Some(dash) = dash_win {
+                    let _ = dash.show();
+                    let _ = dash.set_focus();
+                }
             } else {
-                let _ = win.hide();
+                if let Some(dash) = dash_win {
+                    let _ = dash.hide();
+                }
+                if let Some(main) = main_win {
+                    let _ = main.show();
+                }
             }
-            Ok(next)
-        } else {
-            Err("Dashboard window not found".to_string())
-        }
+        });
+
+        Ok(next)
     }
 
     #[tauri::command]
@@ -431,14 +444,27 @@ pub fn run() {
                                 let current = state_cmd.dashboard_visible.load(Ordering::SeqCst);
                                 let next = !current;
                                 state_cmd.dashboard_visible.store(next, Ordering::SeqCst);
-                                if let Some(win) = app_cmd.get_webview_window("dashboard") {
+                                let app_thread = app_cmd.clone();
+                                let _ = app_cmd.run_on_main_thread(move || {
+                                    let main_win = app_thread.get_webview_window("main");
+                                    let dash_win = app_thread.get_webview_window("dashboard");
                                     if next {
-                                        let _ = win.show();
-                                        let _ = win.set_focus();
+                                        if let Some(main) = main_win {
+                                            let _ = main.hide();
+                                        }
+                                        if let Some(dash) = dash_win {
+                                            let _ = dash.show();
+                                            let _ = dash.set_focus();
+                                        }
                                     } else {
-                                        let _ = win.hide();
+                                        if let Some(dash) = dash_win {
+                                            let _ = dash.hide();
+                                        }
+                                        if let Some(main) = main_win {
+                                            let _ = main.show();
+                                        }
                                     }
-                                }
+                                });
                             }
                         }
                     }

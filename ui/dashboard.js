@@ -2,6 +2,8 @@
  * Sli - Top Notch Dashboard Controller
  */
 
+import { SlimeEntity } from './slime_physics.js';
+
 class DashboardApp {
   constructor() {
     this.navItems = document.querySelectorAll('.nav-item');
@@ -9,6 +11,12 @@ class DashboardApp {
     this.viewTitle = document.getElementById('view-title');
     this.viewSubtitle = document.getElementById('view-subtitle');
     this.closeBtn = document.getElementById('dashboard-close-btn');
+
+    // Mini Slime Mascot Avatar Canvas
+    this.miniCanvas = document.getElementById('mini-slime-canvas');
+    this.miniCtx = this.miniCanvas ? this.miniCanvas.getContext('2d') : null;
+    this.brandAvatarBox = document.getElementById('brand-avatar-box');
+    this.mascotAvatarContainer = document.getElementById('mascot-avatar-container');
 
     // Metrics & Card Elements
     this.cardModelName = document.getElementById('card-model-name');
@@ -42,9 +50,49 @@ class DashboardApp {
       'tab-sistema': { title: 'Acciones de Sistema', subtitle: 'Control de pantalla, procesos y utilidades' },
     };
 
+    this.initMiniSlime();
     this.bindEvents();
     this.fetchSummary();
     this.startAutoRefresh();
+  }
+
+  initMiniSlime() {
+    if (!this.miniCanvas || !this.miniCtx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    this.miniCanvas.width = 46 * dpr;
+    this.miniCanvas.height = 46 * dpr;
+    this.miniCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    this.miniSlime = new SlimeEntity({
+      x: 23,
+      y: 23,
+      radius: 15,
+      vertices: 14,
+    });
+
+    let lastTime = performance.now();
+    const loop = (now) => {
+      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+
+      this.miniCtx.clearRect(0, 0, 46, 46);
+      this.miniSlime.update(dt);
+      this.miniSlime.draw(this.miniCtx);
+
+      requestAnimationFrame(loop);
+    };
+
+    requestAnimationFrame(loop);
+
+    // Track mouse to look at user
+    window.addEventListener('mousemove', (e) => {
+      if (!this.miniSlime || !this.miniCanvas) return;
+      const rect = this.miniCanvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      this.miniSlime.lookAt(mx, my);
+    });
   }
 
   bindEvents() {
@@ -55,6 +103,16 @@ class DashboardApp {
         this.switchTab(tabId);
       });
     });
+
+    // Clicking avatar restores Sli to the screen
+    if (this.brandAvatarBox) {
+      this.brandAvatarBox.addEventListener('click', () => {
+        if (this.miniSlime) {
+          this.miniSlime.setState('speaking');
+        }
+        this.closeDashboard();
+      });
+    }
 
     // Close button
     if (this.closeBtn) {
@@ -78,6 +136,7 @@ class DashboardApp {
         if (!text) return;
         if (this.quickInput) this.quickInput.value = '';
 
+        if (this.miniSlime) this.miniSlime.setState('thinking');
         this.addChatMessage(text, 'user');
         this.switchTab('tab-chat');
         await this.sendChatCommand(text);
@@ -87,6 +146,7 @@ class DashboardApp {
     // Mic button
     if (this.btnMicToggle) {
       this.btnMicToggle.addEventListener('click', () => {
+        if (this.miniSlime) this.miniSlime.setState('speaking');
         this.speakText('Hola Neru, te escucho. Puedes decirme qué necesitas.');
       });
     }
@@ -101,6 +161,7 @@ class DashboardApp {
     // Speak summary
     if (this.btnSpeakSummary) {
       this.btnSpeakSummary.addEventListener('click', () => {
+        if (this.miniSlime) this.miniSlime.setState('speaking');
         const model = this.cardModelName ? this.cardModelName.textContent : 'Gemini 3.8 Flash';
         const tasks = this.cardTasksCount ? this.cardTasksCount.textContent : '0';
         const tokens = this.cardTokensCount ? this.cardTokensCount.textContent : '0';
@@ -123,6 +184,7 @@ class DashboardApp {
         if (this.cardModelName) {
           this.cardModelName.textContent = text.replace(/^[^\w]+/, '').trim();
         }
+        if (this.miniSlime) this.miniSlime.setState('speaking');
         this.speakText(`Modelo cambiado a ${text}`);
       });
     }
@@ -151,6 +213,7 @@ class DashboardApp {
 
     if (this.btnTestVoice) {
       this.btnTestVoice.addEventListener('click', () => {
+        if (this.miniSlime) this.miniSlime.setState('speaking');
         this.speakText('Hola Neru, la síntesis de voz neuronal local está funcionando con total fluidez.');
       });
     }
@@ -256,9 +319,18 @@ class DashboardApp {
       const res = await this.invokeTauri('chat_with_sli', { message });
       if (res && res.reply) {
         this.addChatMessage(res.reply, 'sli');
+        if (this.miniSlime) {
+          this.miniSlime.setState('speaking');
+          setTimeout(() => {
+            if (this.miniSlime.state === 'speaking') {
+              this.miniSlime.setState('idle');
+            }
+          }, 2500);
+        }
       }
     } catch (err) {
       this.addChatMessage(`Error: ${err}`, 'sli');
+      if (this.miniSlime) this.miniSlime.setState('idle');
     }
   }
 
