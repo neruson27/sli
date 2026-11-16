@@ -1,0 +1,31 @@
+{
+  "antigravity": {
+    "enabled": true,
+    "presence_dir": "~/.gemini/antigravity-cli/presence",
+    "brain_dir": "~/.gemini/antigravity-cli/brain",
+    "poll_interval_ms": 350
+  },
+  "voice": {
+    "enabled": true,
+    "stt_model": "base",
+    "language": "es",
+    "tts_voice": "es_ES-dalia-medium",
+    "push_to_talk_key": "Super+S"
+  },
+  "hotkeys": {
+    "push_to_talk": "Super+S",
+    "toggle_dock": "Super+D"
+  },
+  "providers": {
+    "default": "antigravity",
+    "anthropic_api_key": "",
+    "gemini_api_key": ""
+  },
+  "window": {
+    "always_on_top": true,
+    "transparent": true,
+    "width": 180,
+    "height": 180,
+    "dock_position": "top-right"
+  }
+}

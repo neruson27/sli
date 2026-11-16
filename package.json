@@ -1,0 +1,21 @@
+{
+  "name": "sli",
+  "version": "0.1.0",
+  "description": "Fluid desktop pet companion for Antigravity CLI and multi-monitor desktop management",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "dev:ui": "bun x vite ui",
+    "dev": "cargo tauri dev"
+  },
+  "keywords": [
+    "slime",
+    "desktop-pet",
+    "antigravity",
+    "hyprland",
+    "voice-assistant"
+  ],
+  "author": "neruson27",
+  "license": "MIT"
+}
