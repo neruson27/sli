@@ -2,6 +2,7 @@ pub mod antigravity_watcher;
 pub mod hyprland_ipc;
 pub mod system_controller;
 
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use tauri::Emitter;
@@ -142,16 +143,153 @@ pub fn stop_ptt_core(state: &AppState) -> Result<String, String> {
     Ok("recording_stopped".to_string())
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatMessageResponse {
+    pub reply: String,
+    pub action_taken: Option<String>,
+}
+
+/// Helper function to speak text out loud using local Piper neural voice
+pub fn speak_text_core(text: &str) -> Result<(), String> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    let piper_bin = PathBuf::from(&home).join(".local/share/sli/piper/piper/piper");
+    let model = PathBuf::from(&home).join(".local/share/sli/piper/es_MX-claude-high.onnx");
+    let out_file = PathBuf::from("/tmp/sli_speech.wav");
+
+    if piper_bin.exists() && model.exists() {
+        let mut child = std::process::Command::new(&piper_bin)
+            .args([
+                "--model",
+                &model.to_string_lossy(),
+                "--output_file",
+                &out_file.to_string_lossy(),
+            ])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| e.to_string())?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            let _ = stdin.write_all(text.as_bytes());
+        }
+        let _ = child.wait();
+
+        let _ = std::process::Command::new("pw-play")
+            .arg(&out_file)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+    }
+    Ok(())
+}
+
+/// Processes chat messages and executes system commands or friendly responses
+pub fn chat_with_sli_core(message: &str) -> ChatMessageResponse {
+    let lower = message.to_lowercase();
+    let trimmed = lower.trim();
+
+    if trimmed.contains("terminal") || trimmed.contains("consola") {
+        let _ = SystemController::open_terminal();
+        let reply = "¡Listo! He abierto la terminal para ti.".to_string();
+        let _ = speak_text_core(&reply);
+        return ChatMessageResponse {
+            reply,
+            action_taken: Some("open_terminal".to_string()),
+        };
+    }
+
+    if trimmed.contains("navegador")
+        || trimmed.contains("browser")
+        || trimmed.contains("chrome")
+        || trimmed.contains("firefox")
+    {
+        let _ = SystemController::open_url("https://google.com");
+        let reply = "Abriendo el navegador web.".to_string();
+        let _ = speak_text_core(&reply);
+        return ChatMessageResponse {
+            reply,
+            action_taken: Some("open_browser".to_string()),
+        };
+    }
+
+    if trimmed.contains("pantalla") || trimmed.contains("monitor") {
+        let _ = HyprlandClient::focus_monitor("+1");
+        let reply = "He cambiado el foco de la pantalla en Hyprland.".to_string();
+        let _ = speak_text_core(&reply);
+        return ChatMessageResponse {
+            reply,
+            action_taken: Some("focus_monitor".to_string()),
+        };
+    }
+
+    if trimmed.contains("estado")
+        || trimmed.contains("que haces")
+        || trimmed.contains("qué haces")
+        || trimmed.contains("qué estás haciendo")
+    {
+        let reply = "Estoy monitoreando tus tareas activas en Antigravity y cuidando tu escritorio."
+            .to_string();
+        let _ = speak_text_core(&reply);
+        return ChatMessageResponse {
+            reply,
+            action_taken: None,
+        };
+    }
+
+    let reply = format!("Entendido. Procesé tu solicitud: \"{}\".", message);
+    let _ = speak_text_core(&reply);
+    ChatMessageResponse {
+        reply,
+        action_taken: None,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tauri Commands exposed to the webview frontend
 // ---------------------------------------------------------------------------
 
 pub mod commands {
     use super::*;
+    use crate::antigravity_watcher::{
+        find_active_session_with_brain, get_session_summary, SessionSummary,
+    };
 
     #[tauri::command]
     pub fn get_antigravity_status(state: tauri::State<'_, AppState>) -> AntigravityState {
         get_antigravity_status_core(&state)
+    }
+
+    #[tauri::command]
+    pub fn get_active_session_summary() -> SessionSummary {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+        let presence_dir = PathBuf::from(&home).join(".gemini/antigravity-cli/presence");
+        let brain_dir = PathBuf::from(&home).join(".gemini/antigravity-cli/brain");
+
+        let session_id = find_active_session_with_brain(&presence_dir, &brain_dir)
+            .unwrap_or_else(|| "default".to_string());
+        get_session_summary(&brain_dir, &session_id)
+    }
+
+    #[tauri::command]
+    pub fn chat_with_sli(message: String) -> ChatMessageResponse {
+        chat_with_sli_core(&message)
+    }
+
+    #[tauri::command]
+    pub fn speak_text(text: String) -> Result<(), String> {
+        speak_text_core(&text)
+    }
+
+    #[tauri::command]
+    pub fn set_window_size(window: tauri::Window, width: u32, height: u32) -> Result<(), String> {
+        window
+            .set_size(tauri::Size::Logical(tauri::LogicalSize {
+                width: width as f64,
+                height: height as f64,
+            }))
+            .map_err(|e| e.to_string())
     }
 
     #[tauri::command]
@@ -238,6 +376,10 @@ pub fn run() {
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             get_antigravity_status,
+            get_active_session_summary,
+            chat_with_sli,
+            speak_text,
+            set_window_size,
             dispatch_screen_action,
             toggle_dock,
             start_ptt,

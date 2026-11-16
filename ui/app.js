@@ -1,7 +1,7 @@
 /**
  * Sli - Frontend Application Controller
  * Handles Canvas rendering loop, mouse drag interactions, HUD bubble,
- * and Tauri IPC event listeners.
+ * Right-Click Context Menu, and Tauri IPC event listeners.
  */
 
 import { SlimeEntity } from './slime_physics.js';
@@ -15,6 +15,30 @@ class SliApp {
     this.hudStatus = document.getElementById('hud-status');
     this.hudMessage = document.getElementById('hud-message');
     this.pttIndicator = document.getElementById('ptt-indicator');
+
+    // Context Menu DOM Elements
+    this.sliMenu = document.getElementById('sli-menu');
+    this.menuCloseBtn = document.getElementById('menu-close-btn');
+    this.menuTabs = document.querySelectorAll('.menu-tab');
+    this.tabPanes = document.querySelectorAll('.tab-pane');
+    this.modelStatusText = document.getElementById('model-status-text');
+    this.metricInTokens = document.getElementById('metric-in-tokens');
+    this.metricOutTokens = document.getElementById('metric-out-tokens');
+    this.metricCacheTokens = document.getElementById('metric-cache-tokens');
+    this.modelSelect = document.getElementById('model-select');
+    this.btnSpeakStatus = document.getElementById('btn-speak-status');
+    this.btnDockToggle = document.getElementById('btn-dock-toggle');
+    this.tasksContainer = document.getElementById('tasks-container');
+    this.taskCount = document.getElementById('task-count');
+    this.btnRefreshTasks = document.getElementById('btn-refresh-tasks');
+    this.chatMessages = document.getElementById('chat-messages');
+    this.chatForm = document.getElementById('chat-form');
+    this.chatInput = document.getElementById('chat-input');
+    this.chatMicBtn = document.getElementById('chat-mic-btn');
+    this.menuSessionChip = document.getElementById('menu-session');
+
+    this.isMenuOpen = false;
+    this.menuRefreshInterval = null;
 
     this.dpr = window.devicePixelRatio || 1;
     this.width = window.innerWidth || 180;
@@ -34,6 +58,7 @@ class SliApp {
 
     this.initCanvas();
     this.bindEvents();
+    this.bindMenuEvents();
     this.bindTauriIPC();
     this.bindKeyboardShortcuts();
     this.startLoop();
@@ -111,6 +136,274 @@ class SliApp {
     this.canvas.addEventListener('dblclick', () => {
       this.toggleDock();
     });
+
+    // Open context menu on right click
+    this.canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this.toggleMenu();
+    });
+  }
+
+  bindMenuEvents() {
+    // Close button
+    if (this.menuCloseBtn) {
+      this.menuCloseBtn.addEventListener('click', () => {
+        this.closeMenu();
+      });
+    }
+
+    // Tabs switching
+    this.menuTabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const tabId = tab.getAttribute('data-tab');
+        this.switchTab(tabId);
+      });
+    });
+
+    // Refresh tasks button
+    if (this.btnRefreshTasks) {
+      this.btnRefreshTasks.addEventListener('click', () => {
+        this.fetchSessionSummary();
+      });
+    }
+
+    // Speak status button
+    if (this.btnSpeakStatus) {
+      this.btnSpeakStatus.addEventListener('click', () => {
+        this.speakCurrentStatus();
+      });
+    }
+
+    // Dock toggle button
+    if (this.btnDockToggle) {
+      this.btnDockToggle.addEventListener('click', () => {
+        this.toggleDock();
+      });
+    }
+
+    // Model selection dropdown
+    if (this.modelSelect) {
+      this.modelSelect.addEventListener('change', (e) => {
+        const text = e.target.options[e.target.selectedIndex]?.text || e.target.value;
+        if (this.modelStatusText) {
+          this.modelStatusText.textContent = text.replace(/^[^\w]+/, '').trim();
+        }
+        this.showHUD(`Modelo seleccionado: ${text}`, 'Sli', 'idle', 3000);
+        this.speakText(`Modelo cambiado a ${text}`);
+      });
+    }
+
+    // Chat form submission
+    if (this.chatForm) {
+      this.chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = this.chatInput ? this.chatInput.value.trim() : '';
+        if (!text) return;
+        if (this.chatInput) this.chatInput.value = '';
+
+        this.addChatMessage(text, 'user');
+        await this.sendChatMessage(text);
+      });
+    }
+
+    // Chat mic button
+    if (this.chatMicBtn) {
+      this.chatMicBtn.addEventListener('click', () => {
+        this.showHUD('Voz activa. Te escucho...', 'Sli', 'speaking', 3000);
+        this.speakText('Hola Neru, ¿qué necesitas que haga por ti?');
+      });
+    }
+  }
+
+  toggleMenu() {
+    if (this.isMenuOpen) {
+      this.closeMenu();
+    } else {
+      this.openMenu();
+    }
+  }
+
+  openMenu() {
+    this.isMenuOpen = true;
+    if (this.sliMenu) {
+      this.sliMenu.classList.remove('hidden');
+    }
+    this.setTauriWindowSize(380, 520);
+    this.fetchSessionSummary();
+
+    // Start auto-refresh interval while menu is open
+    if (!this.menuRefreshInterval) {
+      this.menuRefreshInterval = setInterval(() => {
+        if (this.isMenuOpen) {
+          this.fetchSessionSummary();
+        }
+      }, 3500);
+    }
+  }
+
+  closeMenu() {
+    this.isMenuOpen = false;
+    if (this.sliMenu) {
+      this.sliMenu.classList.add('hidden');
+    }
+    this.setTauriWindowSize(220, 220);
+
+    if (this.menuRefreshInterval) {
+      clearInterval(this.menuRefreshInterval);
+      this.menuRefreshInterval = null;
+    }
+  }
+
+  switchTab(tabId) {
+    this.menuTabs.forEach((tab) => {
+      tab.classList.toggle('active', tab.getAttribute('data-tab') === tabId);
+    });
+    this.tabPanes.forEach((pane) => {
+      pane.classList.toggle('active', pane.id === tabId);
+    });
+
+    if (tabId === 'tab-tasks') {
+      this.fetchSessionSummary();
+    }
+  }
+
+  async fetchSessionSummary() {
+    try {
+      const tauri = window.__TAURI__;
+      let summary = null;
+      if (tauri?.core?.invoke) {
+        summary = await tauri.core.invoke('get_active_session_summary');
+      } else if (tauri?.invoke) {
+        summary = await tauri.invoke('get_active_session_summary');
+      }
+
+      if (summary) {
+        this.renderSessionSummary(summary);
+      }
+    } catch (err) {
+      console.warn('[Sli] Failed to fetch session summary:', err);
+    }
+  }
+
+  renderSessionSummary(summary) {
+    if (this.modelStatusText && summary.model) {
+      this.modelStatusText.textContent = summary.model;
+    }
+
+    const fmtNum = (n) => {
+      if (!n) return '0';
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+      return n.toString();
+    };
+
+    if (this.metricInTokens) this.metricInTokens.textContent = fmtNum(summary.total_input_tokens);
+    if (this.metricOutTokens) this.metricOutTokens.textContent = fmtNum(summary.total_output_tokens);
+    if (this.metricCacheTokens) this.metricCacheTokens.textContent = fmtNum(summary.total_cache_tokens);
+
+    if (this.taskCount && summary.recent_tasks) {
+      this.taskCount.textContent = summary.recent_tasks.length.toString();
+    }
+
+    if (this.tasksContainer && summary.recent_tasks) {
+      if (summary.recent_tasks.length === 0) {
+        this.tasksContainer.innerHTML = '<div class="task-item empty" style="color:var(--text-muted); font-size:11px; text-align:center; padding:12px;">No hay tareas registradas en esta sesión</div>';
+      } else {
+        // Show newest tasks first
+        const tasks = [...summary.recent_tasks].reverse().slice(0, 30);
+        this.tasksContainer.innerHTML = tasks.map((task) => {
+          const detailHtml = task.detail ? `<div class="task-item-detail">${this.escapeHtml(task.detail)}</div>` : '';
+          return `
+            <div class="task-item">
+              <div class="task-item-title">${this.escapeHtml(task.title)}</div>
+              ${detailHtml}
+            </div>
+          `;
+        }).join('');
+      }
+    }
+  }
+
+  escapeHtml(str) {
+    if (!str) return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  addChatMessage(text, sender = 'user') {
+    if (!this.chatMessages) return;
+
+    const div = document.createElement('div');
+    div.className = `chat-msg ${sender}`;
+    const bubble = document.createElement('span');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = text;
+    div.appendChild(bubble);
+
+    this.chatMessages.appendChild(div);
+    this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+  }
+
+  async sendChatMessage(message) {
+    this.slime.setState('thinking');
+    try {
+      const tauri = window.__TAURI__;
+      let res = null;
+      if (tauri?.core?.invoke) {
+        res = await tauri.core.invoke('chat_with_sli', { message });
+      } else if (tauri?.invoke) {
+        res = await tauri.invoke('chat_with_sli', { message });
+      } else {
+        res = { reply: `Respuesta simulada a: "${message}"` };
+      }
+
+      if (res && res.reply) {
+        this.addChatMessage(res.reply, 'sli');
+        this.slime.setState('speaking');
+        setTimeout(() => {
+          if (this.slime.state === 'speaking') {
+            this.slime.setState('idle');
+          }
+        }, 3000);
+      }
+    } catch (err) {
+      this.addChatMessage(`Error: ${err}`, 'sli');
+      this.slime.setState('idle');
+    }
+  }
+
+  speakCurrentStatus() {
+    const model = this.modelStatusText ? this.modelStatusText.textContent : 'Gemini 3.8 Flash';
+    const count = this.taskCount ? this.taskCount.textContent : '0';
+    const text = `Estoy utilizando el modelo ${model}. Se han completado ${count} acciones en la sesión actual.`;
+    this.showHUD(text, 'Sli', 'speaking', 5000);
+    this.speakText(text);
+  }
+
+  speakText(text) {
+    try {
+      const tauri = window.__TAURI__;
+      if (tauri?.core?.invoke) {
+        tauri.core.invoke('speak_text', { text }).catch(() => {});
+      } else if (tauri?.invoke) {
+        tauri.invoke('speak_text', { text }).catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  setTauriWindowSize(width, height) {
+    try {
+      const tauri = window.__TAURI__;
+      if (tauri?.core?.invoke) {
+        tauri.core.invoke('set_window_size', { width, height }).catch(() => {});
+      } else if (tauri?.invoke) {
+        tauri.invoke('set_window_size', { width, height }).catch(() => {});
+      }
+    } catch (_) {}
   }
 
   toggleDock() {
@@ -178,7 +471,6 @@ class SliApp {
   }
 
   bindTauriIPC() {
-    // Check for Tauri event listener
     const tauri = window.__TAURI__;
     if (!tauri?.event?.listen) {
       console.info('[Sli] Running outside Tauri or waiting for IPC bridge.');
@@ -251,8 +543,18 @@ class SliApp {
 
   bindKeyboardShortcuts() {
     window.addEventListener('keydown', (e) => {
-      // Ignore if typing in an input
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      // If typing in input or textarea, only handle Escape
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        if (e.key === 'Escape' && this.isMenuOpen) {
+          this.closeMenu();
+        }
+        return;
+      }
+
+      if (e.key === 'Escape' && this.isMenuOpen) {
+        this.closeMenu();
+        return;
+      }
 
       switch (e.key) {
         case '1':

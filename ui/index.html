@@ -25,6 +25,92 @@
 
     <!-- Canvas for 2D Spring-Mass Slime Jelly -->
     <canvas id="slime-canvas"></canvas>
+
+    <!-- Glassmorphic Right-Click Context Menu -->
+    <div id="sli-menu" class="sli-menu hidden">
+      <!-- Header -->
+      <div class="menu-header">
+        <div class="menu-title-row">
+          <div class="menu-avatar">💧</div>
+          <div class="menu-title-info">
+            <span class="menu-title">Sli Assistant</span>
+            <span id="menu-session" class="menu-session-chip">Sincronizado</span>
+          </div>
+        </div>
+        <button id="menu-close-btn" class="menu-btn-icon" title="Cerrar">✕</button>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="menu-tabs">
+        <button class="menu-tab active" data-tab="tab-model">Modelo</button>
+        <button class="menu-tab" data-tab="tab-tasks">Tareas (<span id="task-count">0</span>)</button>
+        <button class="menu-tab" data-tab="tab-chat">Chat</button>
+      </div>
+
+      <!-- Tab 1: Model & Resource Status -->
+      <div id="tab-model" class="tab-pane active">
+        <div class="card-status">
+          <div class="card-status-header">
+            <span class="status-indicator-dot"></span>
+            <span id="model-status-text" class="model-status-name">Gemini 3.8 Flash (Medium)</span>
+          </div>
+          <div class="metrics-grid">
+            <div class="metric-item">
+              <span class="metric-label">Entrada</span>
+              <span id="metric-in-tokens" class="metric-val">0</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">Salida</span>
+              <span id="metric-out-tokens" class="metric-val">0</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">Caché</span>
+              <span id="metric-cache-tokens" class="metric-val">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="menu-field">
+          <label class="menu-label">Selección de Modelo:</label>
+          <select id="model-select" class="menu-select">
+            <option value="gemini-3.8-flash">✨ Gemini 3.8 Flash (Recomendado)</option>
+            <option value="gemini-2.5-pro">🧠 Gemini 2.5 Pro (Razonamiento)</option>
+            <option value="claude-3-7-sonnet">⚡ Claude 3.7 Sonnet</option>
+            <option value="claude-3-5-haiku">🐇 Claude 3.5 Haiku</option>
+          </select>
+        </div>
+
+        <div class="quick-actions">
+          <button id="btn-speak-status" class="action-btn">🗣️ Decir estado por voz</button>
+          <button id="btn-dock-toggle" class="action-btn">📌 Acoplar a la barra</button>
+        </div>
+      </div>
+
+      <!-- Tab 2: Recent Task Activity -->
+      <div id="tab-tasks" class="tab-pane">
+        <div class="task-list-header">
+          <span>Últimas acciones realizadas</span>
+          <button id="btn-refresh-tasks" class="btn-refresh" title="Actualizar">↻</button>
+        </div>
+        <div id="tasks-container" class="tasks-container">
+          <div class="task-item empty">Cargando tareas...</div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Interactive Chat with Sli -->
+      <div id="tab-chat" class="tab-pane">
+        <div id="chat-messages" class="chat-messages">
+          <div class="chat-msg sli">
+            <span class="msg-bubble">¡Hola Neru! Puedes pedirme abrir aplicaciones, cambiar de pantalla o hacerme cualquier consulta.</span>
+          </div>
+        </div>
+        <form id="chat-form" class="chat-form">
+          <input type="text" id="chat-input" class="chat-input" placeholder="Pídele algo a Sli..." autocomplete="off" />
+          <button type="submit" id="chat-send-btn" class="chat-send-btn" title="Enviar">➤</button>
+          <button type="button" id="chat-mic-btn" class="chat-mic-btn" title="Hablar">🎤</button>
+        </form>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="app.js"></script>

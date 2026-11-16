@@ -212,6 +212,128 @@ pub fn get_transcript_path(brain_dir: &Path, session_id: &str) -> PathBuf {
         .join(".system_generated/logs/transcript.jsonl")
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskItem {
+    pub step_index: u64,
+    pub task_type: String,
+    pub title: String,
+    pub detail: Option<String>,
+    pub status: String,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub session_id: String,
+    pub model: String,
+    pub total_input_tokens: u64,
+    pub total_output_tokens: u64,
+    pub total_cache_tokens: u64,
+    pub recent_tasks: Vec<TaskItem>,
+}
+
+/// Reads the active transcript and generates a rich summary of tasks, model name, and token usage.
+pub fn get_session_summary(brain_dir: &Path, session_id: &str) -> SessionSummary {
+    let transcript_path = get_transcript_path(brain_dir, session_id);
+    let mut model_name = "Gemini 3.8 Flash".to_string();
+    let mut total_in = 0u64;
+    let mut total_out = 0u64;
+    let mut total_cache = 0u64;
+    let mut tasks = Vec::new();
+
+    if let Ok(file) = File::open(&transcript_path) {
+        let reader = BufReader::new(file);
+        for line_res in reader.lines() {
+            let Ok(line) = line_res else { continue };
+            let trimmed = line.trim();
+            if trimmed.is_empty() { continue };
+            let Ok(val) = serde_json::from_str::<Value>(trimmed) else { continue };
+
+            // Extract model name
+            if let Some(m) = val.get("model").and_then(|s| s.as_str()) {
+                if !m.is_empty() {
+                    model_name = match m {
+                        "gemini-3.8-flash-medium" | "gemini-3.8-flash" => "Gemini 3.8 Flash (Medium)".into(),
+                        "gemini-2.5-pro" | "gemini-3.8-pro" => "Gemini 2.5 Pro".into(),
+                        other => other.to_string(),
+                    };
+                }
+            }
+
+            // Extract tokens
+            if let Some(tok) = val.get("input_tokens").and_then(|t| t.as_u64()) {
+                total_in += tok;
+            }
+            if let Some(tok) = val.get("output_tokens").and_then(|t| t.as_u64()) {
+                total_out += tok;
+            }
+            if let Some(tok) = val.get("cache_read_tokens").and_then(|t| t.as_u64()) {
+                total_cache += tok;
+            }
+
+            let step_idx = val.get("step_index").and_then(|s| s.as_u64()).unwrap_or(0);
+            let ts = val.get("created_at").and_then(|s| s.as_str()).unwrap_or("").to_string();
+            let status = val.get("status").and_then(|s| s.as_str()).unwrap_or("done").to_string();
+
+            // Check tool calls
+            if let Some(calls) = val.get("tool_calls").and_then(|c| c.as_array()) {
+                for call in calls {
+                    let name = call.get("name").and_then(|s| s.as_str()).unwrap_or("tool");
+                    let summary = call.get("toolSummary")
+                        .or_else(|| call.get("args").and_then(|a| a.get("toolSummary")))
+                        .and_then(|s| s.as_str())
+                        .map(clean_tool_summary);
+
+                    tasks.push(TaskItem {
+                        step_index: step_idx,
+                        task_type: "tool".to_string(),
+                        title: format!("⚡ {}", name),
+                        detail: summary,
+                        status: status.clone(),
+                        timestamp: ts.clone(),
+                    });
+                }
+            } else if let Some(mtype) = val.get("type").and_then(|t| t.as_str()) {
+                if mtype == "USER_INPUT" {
+                    let content = val.get("content").and_then(|s| s.as_str()).unwrap_or("");
+                    let clean_content = content
+                        .replace("<USER_REQUEST>", "")
+                        .replace("</USER_REQUEST>", "")
+                        .split("<ADDITIONAL_METADATA>")
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .to_string();
+
+                    tasks.push(TaskItem {
+                        step_index: step_idx,
+                        task_type: "user".to_string(),
+                        title: "👤 Mensaje del usuario".to_string(),
+                        detail: Some(clean_content),
+                        status: "done".to_string(),
+                        timestamp: ts,
+                    });
+                }
+            }
+        }
+    }
+
+    // Keep the most recent 12 tasks
+    if tasks.len() > 12 {
+        tasks = tasks.split_off(tasks.len() - 12);
+    }
+    tasks.reverse();
+
+    SessionSummary {
+        session_id: session_id.to_string(),
+        model: model_name,
+        total_input_tokens: total_in,
+        total_output_tokens: total_out,
+        total_cache_tokens: total_cache,
+        recent_tasks: tasks,
+    }
+}
+
 /// Reads new lines appended to the transcript starting from `offset`.
 fn read_new_lines_from_transcript(
     path: &Path,

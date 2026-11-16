@@ -103,4 +103,15 @@ mod tests {
         let ws_err = dispatch_screen_action_core("move_workspace", "single_target").unwrap_err();
         assert!(ws_err.contains("Target must be 'workspace monitor'"));
     }
+
+    #[test]
+    fn test_chat_with_sli() {
+        use sli_lib::chat_with_sli_core;
+
+        let res_status = chat_with_sli_core("cual es tu estado?");
+        assert!(res_status.reply.contains("monitoreando tus tareas activas"));
+
+        let res_other = chat_with_sli_core("puedes contarme una historia?");
+        assert!(res_other.reply.contains("puedes contarme una historia?"));
+    }
 }
