@@ -26,16 +26,65 @@ class TTSEngine:
         piper_path: Optional[str] = None,
     ):
         self.sample_rate = sample_rate
-        self.voice_model = voice_model or "es_ES-dalia-medium"
         self.piper_path = piper_path or self._find_piper_binary()
+        self.voice_model = self._find_voice_model(voice_model)
 
     def _find_piper_binary(self) -> Optional[str]:
         """Check if piper binary is installed on PATH or local models dir."""
+        local_piper = os.path.expanduser("~/.local/share/sli/piper/piper/piper")
+        if os.path.exists(local_piper):
+            return local_piper
+
         for name in ["piper", "piper-tts"]:
             path = shutil.which(name)
             if path and os.path.exists(path):
                 return path
         return None
+
+    def _find_voice_model(self, preferred: Optional[str]) -> str:
+        """Finds high-quality local Piper ONNX voice model."""
+        if preferred and os.path.exists(preferred):
+            return preferred
+
+        candidates = [
+            os.path.expanduser("~/.local/share/sli/piper/es_MX-claude-high.onnx"),
+            os.path.expanduser("~/.local/share/sli/piper/es_MX-ald-medium.onnx"),
+            os.path.expanduser("~/.local/share/sli/piper/es_ES-dalia-medium.onnx"),
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+        return preferred or "es_MX-claude-high"
+
+    def play(self, wav_bytes: bytes) -> bool:
+        """Plays standard WAV audio bytes through system PipeWire/PulseAudio."""
+        import subprocess
+        import tempfile
+
+        players = ["pw-play", "paplay", "aplay"]
+        player_bin = None
+        for p in players:
+            found = shutil.which(p)
+            if found:
+                player_bin = found
+                break
+
+        if not player_bin:
+            return False
+
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+                tf.write(wav_bytes)
+                tmp_path = tf.name
+
+            subprocess.Popen(
+                [player_bin, tmp_path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return True
+        except Exception:
+            return False
 
     def synthesize(self, text: str) -> bytes:
         """

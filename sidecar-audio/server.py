@@ -53,9 +53,11 @@ def process_command(req: Dict[str, Any]) -> Dict[str, Any]:
             route_res = router.route(prompt)
             res.update(route_res.to_dict())
 
-        elif cmd == "tts":
+        elif cmd in ("tts", "speak"):
             text = req.get("text", "")
             result = tts.synthesize_with_visemes(text)
+            if req.get("play", False) or cmd == "speak":
+                tts.play(result["wav_bytes"])
             wav_b64 = base64.b64encode(result["wav_bytes"]).decode("ascii")
             res["audio_base64"] = wav_b64
             res["amplitudes"] = result["amplitudes"]
