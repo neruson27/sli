@@ -58,7 +58,7 @@ Además de ser un adorable compañero visual, Sli actúa como **puente interacti
      - `IDLE`: Respiración tranquila habitual.
      - `THINKING`: Aura cian con mirada concentrada.
      - `EXECUTING_TOOL`: Píldora de estado con el nombre de la herramienta activa (ej. `run_command`, `edit_file`).
-     - `NEEDS_INPUT`: Salto de alerta en tono ámbar y suave sonido de aviso opcional.
+     - `NEEDS_INPUT`: Salto de alerta en tono ámbar y suave aviso visual.
 
 4. **Motor de Voz Local y Privado (100% Offline)**:
    - **STT (Reconocimiento de voz)**: `faster-whisper` (modelos base/small con cuantización INT8) para transcripción local instantánea.
@@ -94,6 +94,58 @@ git clone https://github.com/neruson27/sli.git
 cd sli
 cp config.example.json ~/.config/sli/config.json
 ```
+
+---
+
+## ⚡ Inicio Rápido (Quickstart)
+
+### 1. Iniciar la Aplicación de Escritorio Sli
+Inicia la aplicación completa en Tauri v2 con ventana transparente, atajos globales y soporte IPC:
+```bash
+cargo tauri dev
+# o alternativamente:
+npm run dev
+```
+
+### 2. Iniciar el Sidecar de Audio y Enrutador Multimodelo
+Ejecuta el servidor de voz en Python:
+```bash
+# Modo estándar IPC por stdio (utilizado automáticamente por Tauri)
+python sidecar-audio/server.py
+
+# O modo servidor HTTP independiente para pruebas locales (puerto 5174)
+python sidecar-audio/server.py --http --port 5174
+```
+
+### 3. Vista Previa de la Interfaz Web Independiente
+Previsualiza y ajusta la física de resortes del slime en cualquier navegador web:
+```bash
+npm run dev:ui
+```
+
+---
+
+## 📖 Guía de Uso
+
+### Interactuando con Sli
+- **Arrastrar**: Haz clic izquierdo y arrastra a Sli libremente a través de cualquiera de tus monitores. Al soltarlo, conservará la inercia y rebotará en los límites de la pantalla.
+- **Tocar / Afecto**: Haz clic sobre Sli para provocar una adorable deformación elástica y una expresión cariñosa.
+- **Modo Anclado / Barra (`Super + D`)**: Alterna entre mascota libre flotante y una píldora compacta anclada en el borde superior.
+
+### Compañero de Antigravity CLI
+Cuando ejecutas agentes de Antigravity (`agy` o `gemini-cli`), Sli detecta automáticamente la sesión activa:
+- **`IDLE`**: Respiración suave y ojos relajados.
+- **`THINKING`**: El agente está planificando o analizando tareas; Sli emite un brillo cian suave con mirada concentrada.
+- **`EXECUTING_TOOL`**: El agente ejecuta comandos o herramientas (`run_command`, `edit_file`, etc.); Sli despliega una píldora indicando la herramienta en curso.
+- **`NEEDS_INPUT`**: El agente requiere confirmación o respuesta del usuario; Sli realiza un salto de alerta con tono ámbar sin robar el foco del teclado.
+
+### Control por Voz (Push-To-Talk)
+1. Mantén presionado **`Super + S`** (o pulsa el icono de micrófono / haz clic en Sli).
+2. Di tu comando en español o inglés:
+   - *"Corre los tests del proyecto"* -> Se enruta a ejecución de comandos de Antigravity CLI.
+   - *"Explícame cómo funciona la física de resortes"* -> Se enruta al modelo Claude para razonamiento y charla.
+   - *"Cambia a la pantalla 2"* -> Se despacha mediante IPC de Hyprland para enfocar el monitor 2.
+3. Suelta `Super + S` para sintetizar la respuesta localmente con Piper TTS mientras Sli sincroniza sus labios.
 
 ---
 
@@ -139,7 +191,7 @@ Sli carga su configuración desde `~/.config/sli/config.json` (puedes tomar como
 
 ## 🪟 Integración con Hyprland
 
-Para que la ventana flotante mantenga su transparencia, ausencia de bordes y no interfiera con tu flujo de trabajo, agrega estas reglas a tu `hyprland.conf`:
+Para que la ventana flotante mantenga su transparencia, ausencia de bordes, fijación y tamaño óptimo en Hyprland, añade las siguientes reglas a tu `hyprland.conf`:
 
 ```ini
 # Reglas de ventana para Sli en Hyprland
@@ -149,24 +201,44 @@ windowrulev2 = noborder, class:(sli)
 windowrulev2 = noblur, class:(sli)
 windowrulev2 = nodim, class:(sli)
 windowrulev2 = noshadow, class:(sli)
+windowrulev2 = size 180 180, class:(sli)
+```
+
+### Atajos Globales en Hyprland
+Para activar Push-to-Talk y cambiar de modo de acoplamiento incluso cuando otra aplicación tenga el foco:
+
+```ini
+# Pasar atajos de teclado directamente a la ventana de Sli
+bind = SUPER, S, pass, ^(sli)$
+bind = SUPER, D, pass, ^(sli)$
 ```
 
 ---
 
-## 🎮 Desarrollo y Pruebas
+## 🧪 Pruebas (Testing)
 
-Para ejecutar las pruebas y los entornos de desarrollo:
+Sli cuenta con suites de pruebas automatizadas que cubren la física del frontend, el núcleo en Rust y el motor de audio en Python:
 
+### Ejecutar Todas las Pruebas
 ```bash
-# Ejecutar suite de pruebas unitarias
-npm test
-
-# Iniciar servidor UI en modo desarrollo independiente
-npm run dev:ui
-
-# Iniciar aplicación completa de Tauri
-npm run dev
+npm test && cargo test --manifest-path src-tauri/Cargo.toml && python -m unittest sidecar-audio/test_router.py
 ```
+
+### Ejecutar Suites Individuales
+- **Frontend y Física del Slime (Node.js)**:
+  ```bash
+  npm test
+  ```
+- **Núcleo Rust Tauri y Observadores (Cargo)**:
+  ```bash
+  cargo test --manifest-path src-tauri/Cargo.toml
+  ```
+- **Sidecar de Voz y Enrutador Multimodelo (Python)**:
+  ```bash
+  python -m unittest sidecar-audio/test_router.py
+  # o con pytest:
+  python -m pytest sidecar-audio/
+  ```
 
 ---
 

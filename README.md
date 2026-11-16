@@ -58,7 +58,7 @@ Beyond being a cute companion, Sli acts as an **interactive companion for the An
      - `IDLE`: Normal relaxed breathing.
      - `THINKING`: Cyan aura with focused eyes.
      - `EXECUTING_TOOL`: Discrete status pill showing active tool (e.g., `run_command`, `edit_file`).
-     - `NEEDS_INPUT`: Amber alert hop with optional gentle chime.
+     - `NEEDS_INPUT`: Amber alert hop with gentle notification pulse.
 
 4. **100% Offline Local Voice Engine**:
    - **STT (Speech-to-Text)**: `faster-whisper` (base/small models INT8 quantized) for zero-latency local speech recognition.
@@ -94,6 +94,58 @@ git clone https://github.com/neruson27/sli.git
 cd sli
 cp config.example.json ~/.config/sli/config.json
 ```
+
+---
+
+## ⚡ Quickstart
+
+### 1. Launch Sli Desktop App
+Start the full Tauri v2 application with transparent overlay, global hotkeys, and IPC:
+```bash
+cargo tauri dev
+# or
+npm run dev
+```
+
+### 2. Run the Audio & Multi-Model Router Sidecar
+Run the Python speech engine sidecar directly:
+```bash
+# Standard stdio IPC mode (used automatically by Tauri)
+python sidecar-audio/server.py
+
+# Or standalone HTTP mode for testing (port 5174)
+python sidecar-audio/server.py --http --port 5174
+```
+
+### 3. Run Standalone Frontend Preview
+Preview and tune the 2D slime jelly physics and canvas shaders in your web browser:
+```bash
+npm run dev:ui
+```
+
+---
+
+## 📖 Usage Guide
+
+### Interacting with Sli
+- **Dragging**: Click and drag Sli anywhere across any connected monitor. When released, Sli retains its velocity and bounces against screen edges.
+- **Poke / Affection**: Left-click Sli to trigger a cute reactive squash and heart expression.
+- **Docking Mode (`Super + D`)**: Toggle between floating companion and compact status pill docked to the top screen edge.
+
+### Antigravity Agent Companion
+When you run Antigravity CLI commands (`agy` or `gemini-cli`), Sli automatically tracks the active session:
+- **`IDLE`**: Slime breathes gently with open, relaxed eyes.
+- **`THINKING`**: Antigravity agent is generating plans or evaluating tasks; Sli emits a soft cyan aura with focused expression.
+- **`EXECUTING_TOOL`**: Agent is running tools (`run_command`, `edit_file`, etc.); an informative status pill displays the active tool name.
+- **`NEEDS_INPUT`**: Agent is awaiting user confirmation or response; Sli alerts you with an amber hop animation without stealing keyboard focus.
+
+### Voice Interaction (Push-To-Talk)
+1. Press and hold **`Super + S`** (or click the microphone icon / poke Sli).
+2. Speak your command in Spanish or English:
+   - *"Corre los tests del proyecto"* -> Routed to Antigravity CLI tool execution.
+   - *"Explícame cómo funciona la física de resortes"* -> Routed to Claude conversational reasoning.
+   - *"Cambia a la pantalla 2"* -> Dispatched via Hyprland IPC to focus monitor 2.
+3. Release `Super + S` to synthesize the spoken response locally via Piper TTS while Sli lip-syncs.
 
 ---
 
@@ -139,34 +191,54 @@ Sli loads its configuration from `~/.config/sli/config.json` (or `./config.examp
 
 ## 🪟 Hyprland Integration
 
-For optimal floating and transparency behavior on Hyprland, add the following rules to your `hyprland.conf`:
+For optimal floating, pinning, and transparency behavior on Hyprland, add the following window rules to your `hyprland.conf`:
 
 ```ini
-# Sli Desktop Pet Rules
+# Sli Desktop Pet Window Rules
 windowrulev2 = float, class:(sli)
 windowrulev2 = pin, class:(sli)
 windowrulev2 = noborder, class:(sli)
 windowrulev2 = noblur, class:(sli)
 windowrulev2 = nodim, class:(sli)
 windowrulev2 = noshadow, class:(sli)
+windowrulev2 = size 180 180, class:(sli)
+```
+
+### Hyprland Global Shortcuts
+To allow Push-to-Talk and Dock toggles while other applications have keyboard focus, add these binds:
+
+```ini
+# Forward hotkeys to Sli window
+bind = SUPER, S, pass, ^(sli)$
+bind = SUPER, D, pass, ^(sli)$
 ```
 
 ---
 
-## 🎮 Development & Testing
+## 🧪 Testing
 
-Run unit and integration tests:
+Sli includes comprehensive automated test suites covering the frontend physics, Rust core, and Python audio engine:
 
+### Run All Test Suites
 ```bash
-# Run Node.js test suite
-npm test
-
-# Run UI dev server standalone
-npm run dev:ui
-
-# Launch full Tauri desktop application
-npm run dev
+npm test && cargo test --manifest-path src-tauri/Cargo.toml && python -m unittest sidecar-audio/test_router.py
 ```
+
+### Run Individual Suites
+- **Frontend & Slime Physics (Node.js)**:
+  ```bash
+  npm test
+  ```
+- **Rust Tauri Core & Observers (Cargo)**:
+  ```bash
+  cargo test --manifest-path src-tauri/Cargo.toml
+  ```
+- **Voice Sidecar & Multi-Model Router (Python)**:
+  ```bash
+  python -m unittest sidecar-audio/test_router.py
+  # or
+  python -m pytest sidecar-audio/
+  ```
 
 ---
 
