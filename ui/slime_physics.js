@@ -33,6 +33,7 @@ export class SlimeEntity {
 
     this.targetLook = { x: this.x, y: this.y };
     this.currentLook = { x: this.x, y: this.y };
+    this.faceLag = { x: 0, y: 0 };
 
     this.speechAmplitude = 0;
     this.speechPhase = 0;
@@ -222,6 +223,67 @@ export class SlimeEntity {
       v.x += v.vx * dt;
       v.y += v.vy * dt;
     }
+
+    // Dynamic jelly inertia for facial features
+    let avgVx = 0;
+    let avgVy = 0;
+    for (let i = 0; i < N; i++) {
+      avgVx += this.vertices[i].vx;
+      avgVy += this.vertices[i].vy;
+    }
+    avgVx /= N;
+    avgVy /= N;
+
+    // Face has subtle organic lag behind rapid body motion
+    const lagFactor = 0.05;
+    this.faceLag.x += ((-avgVx * lagFactor) - this.faceLag.x) * Math.min(1, 14 * dt);
+    this.faceLag.y += ((-avgVy * lagFactor) - this.faceLag.y) * Math.min(1, 14 * dt);
+  }
+
+  /**
+   * Calculate dynamic center of mass, scale, and tilt from soft-body vertices
+   * Allows face and highlights to deform and move seamlessly with the jelly body
+   */
+  getCenter() {
+    const N = this.vertices.length;
+    if (N === 0) return { x: this.x, y: this.y, scaleX: 1, scaleY: 1, tilt: 0 };
+
+    let sumX = 0;
+    let sumY = 0;
+    for (let i = 0; i < N; i++) {
+      sumX += this.vertices[i].x;
+      sumY += this.vertices[i].y;
+    }
+    const cx = sumX / N;
+    const cy = sumY / N;
+
+    // Sample top, bottom, left, right perimeter points for squish and tilt
+    const topIdx = Math.round((3 * N) / 4) % N;
+    const botIdx = Math.round(N / 4) % N;
+    const leftIdx = Math.round(N / 2) % N;
+    const rightIdx = 0;
+
+    const topV = this.vertices[topIdx];
+    const botV = this.vertices[botIdx];
+    const leftV = this.vertices[leftIdx];
+    const rightV = this.vertices[rightIdx];
+
+    const currentW = Math.hypot(rightV.x - leftV.x, rightV.y - leftV.y) || (this.radius * 2);
+    const currentH = Math.hypot(botV.x - topV.x, botV.y - topV.y) || (this.radius * 2);
+
+    const scaleX = currentW / (this.radius * 2);
+    const scaleY = currentH / (this.radius * 2);
+
+    // Tilt angle from top/bottom alignment
+    const tilt = Math.atan2(botV.x - topV.x, botV.y - topV.y) * -0.35;
+
+    return {
+      x: cx + this.faceLag.x,
+      y: cy + this.faceLag.y,
+      scaleX: Math.max(0.4, Math.min(1.8, scaleX)),
+      scaleY: Math.max(0.4, Math.min(1.8, scaleY)),
+      tilt
+    };
   }
 
   /**
@@ -336,11 +398,15 @@ export class SlimeEntity {
     if (this.state === 'docked') return;
 
     ctx.save();
+    const center = this.getCenter();
+    if (ctx.translate) ctx.translate(center.x, center.y);
+    if (ctx.rotate) ctx.rotate(center.tilt);
+    if (ctx.scale) ctx.scale(center.scaleX, center.scaleY);
 
     // 1. Primary glossy curved crescent reflection on top
     ctx.beginPath();
-    const hx = this.x - this.radius * 0.32;
-    const hy = this.y - this.radius * 0.40;
+    const hx = -this.radius * 0.32;
+    const hy = -this.radius * 0.40;
     ctx.ellipse(hx, hy, this.radius * 0.32, this.radius * 0.14, -Math.PI / 5.5, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
     ctx.fill();
@@ -353,7 +419,7 @@ export class SlimeEntity {
 
     // 3. Subtle bottom inner glow highlight
     ctx.beginPath();
-    ctx.ellipse(this.x + this.radius * 0.2, this.y + this.radius * 0.48, this.radius * 0.35, this.radius * 0.09, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(this.radius * 0.2, this.radius * 0.48, this.radius * 0.35, this.radius * 0.09, 0.2, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
     ctx.fill();
 
@@ -362,24 +428,32 @@ export class SlimeEntity {
 
   /**
    * Draw Rimuru Tempest's facial features (iconic angled slit eyes, blush, sweatdrop, mouth)
+   * The face is transformed with the dynamic center, tilt, and scale of the soft-body jelly
    */
   drawFace(ctx) {
     ctx.save();
+    const center = this.getCenter();
 
     // Eye target tracking displacement
-    const dx = this.currentLook.x - this.x;
-    const dy = this.currentLook.y - this.y;
+    const dx = this.currentLook.x - center.x;
+    const dy = this.currentLook.y - center.y;
     const dist = Math.hypot(dx, dy) || 1;
     const maxLook = 6;
     const lookX = (dx / dist) * Math.min(dist * 0.08, maxLook);
     const lookY = (dy / dist) * Math.min(dist * 0.08, maxLook);
 
+    // Transform context to dynamic body center so the face squishes, stretches,
+    // tilts, and bounces in organic cohesion with the slime body
+    if (ctx.translate) ctx.translate(center.x, center.y);
+    if (ctx.rotate) ctx.rotate(center.tilt);
+    if (ctx.scale) ctx.scale(center.scaleX, center.scaleY);
+
     const eyeSpacing = this.state === 'docked' ? 24 : 17;
     const eyeOffsetY = this.state === 'docked' ? -1 : -1;
 
-    const leftEyeX = this.x - eyeSpacing + lookX;
-    const rightEyeX = this.x + eyeSpacing + lookX;
-    const eyeY = this.y + eyeOffsetY + lookY;
+    const leftEyeX = -eyeSpacing + lookX;
+    const rightEyeX = eyeSpacing + lookX;
+    const eyeY = eyeOffsetY + lookY;
 
     // 1. Blush cheeks (Rimuru pink ovals)
     this.drawBlush(ctx, leftEyeX - 6, rightEyeX + 6, eyeY + 10);
@@ -399,7 +473,7 @@ export class SlimeEntity {
     }
 
     // 4. Mouth
-    this.drawMouth(ctx, this.x + lookX * 0.6, eyeY + 9);
+    this.drawMouth(ctx, lookX * 0.6, eyeY + 9);
 
     ctx.restore();
   }
