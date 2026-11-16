@@ -84,7 +84,8 @@ pub fn create_tray(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
 
     let menu = Menu::with_items(app, &[&status_item, &toggle_float_item, &open_chat_item, &quit_item])?;
 
-    let icon = app.default_window_icon().cloned().ok_or("No default window icon found")?;
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))
+        .or_else(|_| app.default_window_icon().cloned().ok_or("No default window icon found"))?;
 
     let _tray = TrayIconBuilder::new()
         .icon(icon)
