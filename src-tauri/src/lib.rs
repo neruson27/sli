@@ -517,6 +517,12 @@ pub fn run() {
                                         }
                                     }
                                 });
+                            } else if let Some(msg) = trimmed.strip_prefix("speak:") {
+                                let text = msg.to_string();
+                                let app_speak = app_cmd.clone();
+                                std::thread::spawn(move || {
+                                    let _ = speak_text_with_events(&text, Some(&app_speak));
+                                });
                             }
                         }
                     }

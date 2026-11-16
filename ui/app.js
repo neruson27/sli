@@ -237,9 +237,7 @@ class SliApp {
       } else if (state === 'speaking') {
         this.setPushToTalk(false);
         this.slime.setState('speaking');
-        if (typeof payload.amplitude === 'number') {
-          this.slime.setSpeechAmplitude(payload.amplitude);
-        }
+        this.slime.setSpeechAmplitude(typeof payload.amplitude === 'number' ? payload.amplitude : 0.85);
         if (payload.text) {
           this.showHUD(payload.text, 'Sli', 'speaking', 6000);
         }
