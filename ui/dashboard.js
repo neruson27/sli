@@ -217,6 +217,26 @@ class DashboardApp {
         this.speakText('Hola Neru, la síntesis de voz neuronal local está funcionando con total fluidez.');
       });
     }
+
+    // Voice state listener from Tauri backend
+    const tauri = window.__TAURI__;
+    if (tauri?.event?.listen) {
+      tauri.event.listen('voice-state', (event) => {
+        const payload = event.payload || {};
+        const state = (payload.state || '').toLowerCase();
+        if (state === 'speaking') {
+          if (this.miniSlime) {
+            this.miniSlime.setState('speaking');
+            this.miniSlime.setSpeechAmplitude(payload.amplitude || 0.85);
+          }
+        } else {
+          if (this.miniSlime && this.miniSlime.state === 'speaking') {
+            this.miniSlime.setSpeechAmplitude(0);
+            this.miniSlime.setState('idle');
+          }
+        }
+      });
+    }
   }
 
   switchTab(tabId) {

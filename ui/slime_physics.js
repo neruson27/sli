@@ -651,20 +651,27 @@ export class SlimeEntity {
     ctx.lineCap = 'round';
 
     if (this.state === 'speaking') {
-      // Mouth oscillates open/closed with audio amplitude
-      const amp = this.speechAmplitude > 0 ? this.speechAmplitude : (Math.sin(this.speechPhase) + 1) * 0.35;
-      const mouthHeight = Math.max(2, amp * 9);
-      const mouthWidth = 4 + amp * 3;
+      // Natural speech lip-sync oscillation
+      const flap = Math.abs(Math.sin(this.speechPhase * 1.5));
+      const amp = this.speechAmplitude > 0 ? this.speechAmplitude : 0.85;
+      const mouthOpen = Math.max(0.12, flap * amp);
+      const mouthWidth = 4.5 + mouthOpen * 4.0;
+      const mouthHeight = Math.max(1.8, mouthOpen * 8.5);
 
+      // Cute open anime mouth
       ctx.beginPath();
-      ctx.ellipse(mx, my + 1, mouthWidth, mouthHeight, 0, 0, Math.PI * 2);
+      ctx.ellipse(mx, my + 1 + mouthOpen * 1.5, mouthWidth, mouthHeight, 0, 0, Math.PI * 2);
       ctx.fillStyle = '#1e1b4b';
       ctx.fill();
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
 
-      // Cute pink tongue
-      if (mouthHeight > 4) {
+      // Cute anime pink tongue inside
+      if (mouthHeight > 3.5) {
         ctx.beginPath();
-        ctx.arc(mx, my + mouthHeight - 1, mouthWidth * 0.6, 0, Math.PI);
+        const tongueY = my + 1 + mouthOpen * 1.5 + mouthHeight * 0.35;
+        ctx.ellipse(mx, tongueY, mouthWidth * 0.65, mouthHeight * 0.55, 0, 0, Math.PI);
         ctx.fillStyle = '#f43f5e';
         ctx.fill();
       }

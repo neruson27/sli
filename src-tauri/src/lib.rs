@@ -151,8 +151,8 @@ pub struct ChatMessageResponse {
     pub action_taken: Option<String>,
 }
 
-/// Helper function to speak text out loud using local Piper neural voice
-pub fn speak_text_core(text: &str) -> Result<(), String> {
+/// Helper function to speak text out loud using local Piper neural voice and emit voice events
+pub fn speak_text_with_events(text: &str, app: Option<&tauri::AppHandle>) -> Result<(), String> {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
     let piper_bin = PathBuf::from(&home).join(".local/share/sli/piper/piper/piper");
     let model = PathBuf::from(&home).join(".local/share/sli/piper/es_MX-claude-high.onnx");
@@ -178,24 +178,68 @@ pub fn speak_text_core(text: &str) -> Result<(), String> {
         }
         let _ = child.wait();
 
-        let _ = std::process::Command::new("pw-play")
-            .arg(&out_file)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
+        if let Some(app_handle) = app.cloned() {
+            let text_clone = text.to_string();
+            std::thread::spawn(move || {
+                let _ = app_handle.emit(
+                    "voice-state",
+                    serde_json::json!({
+                        "state": "speaking",
+                        "text": text_clone,
+                        "amplitude": 0.85
+                    }),
+                );
+
+                let play_child = std::process::Command::new("pw-play")
+                    .arg(&out_file)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
+
+                if let Ok(mut c) = play_child {
+                    let _ = c.wait();
+                } else {
+                    std::thread::sleep(std::time::Duration::from_millis(2000));
+                }
+
+                let _ = app_handle.emit(
+                    "voice-state",
+                    serde_json::json!({
+                        "state": "idle",
+                        "amplitude": 0.0
+                    }),
+                );
+            });
+        } else {
+            let _ = std::process::Command::new("pw-play")
+                .arg(&out_file)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn();
+        }
     }
     Ok(())
 }
 
+/// Helper function to speak text out loud without requiring AppHandle
+pub fn speak_text_core(text: &str) -> Result<(), String> {
+    speak_text_with_events(text, None)
+}
+
 /// Processes chat messages and executes system commands or friendly responses
 pub fn chat_with_sli_core(message: &str) -> ChatMessageResponse {
+    chat_with_sli_with_events(None, message)
+}
+
+/// Processes chat messages and emits voice events
+pub fn chat_with_sli_with_events(app: Option<&tauri::AppHandle>, message: &str) -> ChatMessageResponse {
     let lower = message.to_lowercase();
     let trimmed = lower.trim();
 
     if trimmed.contains("terminal") || trimmed.contains("consola") {
         let _ = SystemController::open_terminal();
         let reply = "¡Listo! He abierto la terminal para ti.".to_string();
-        let _ = speak_text_core(&reply);
+        let _ = speak_text_with_events(&reply, app);
         return ChatMessageResponse {
             reply,
             action_taken: Some("open_terminal".to_string()),
@@ -209,7 +253,7 @@ pub fn chat_with_sli_core(message: &str) -> ChatMessageResponse {
     {
         let _ = SystemController::open_url("https://google.com");
         let reply = "Abriendo el navegador web.".to_string();
-        let _ = speak_text_core(&reply);
+        let _ = speak_text_with_events(&reply, app);
         return ChatMessageResponse {
             reply,
             action_taken: Some("open_browser".to_string()),
@@ -219,7 +263,7 @@ pub fn chat_with_sli_core(message: &str) -> ChatMessageResponse {
     if trimmed.contains("pantalla") || trimmed.contains("monitor") {
         let _ = HyprlandClient::focus_monitor("+1");
         let reply = "He cambiado el foco de la pantalla en Hyprland.".to_string();
-        let _ = speak_text_core(&reply);
+        let _ = speak_text_with_events(&reply, app);
         return ChatMessageResponse {
             reply,
             action_taken: Some("focus_monitor".to_string()),
@@ -233,7 +277,7 @@ pub fn chat_with_sli_core(message: &str) -> ChatMessageResponse {
     {
         let reply = "Estoy monitoreando tus tareas activas en Antigravity y cuidando tu escritorio."
             .to_string();
-        let _ = speak_text_core(&reply);
+        let _ = speak_text_with_events(&reply, app);
         return ChatMessageResponse {
             reply,
             action_taken: None,
@@ -241,7 +285,7 @@ pub fn chat_with_sli_core(message: &str) -> ChatMessageResponse {
     }
 
     let reply = format!("Entendido. Procesé tu solicitud: \"{}\".", message);
-    let _ = speak_text_core(&reply);
+    let _ = speak_text_with_events(&reply, app);
     ChatMessageResponse {
         reply,
         action_taken: None,
@@ -275,13 +319,13 @@ pub mod commands {
     }
 
     #[tauri::command]
-    pub fn chat_with_sli(message: String) -> ChatMessageResponse {
-        chat_with_sli_core(&message)
+    pub fn chat_with_sli(app: tauri::AppHandle, message: String) -> ChatMessageResponse {
+        chat_with_sli_with_events(Some(&app), &message)
     }
 
     #[tauri::command]
-    pub fn speak_text(text: String) -> Result<(), String> {
-        speak_text_core(&text)
+    pub fn speak_text(app: tauri::AppHandle, text: String) -> Result<(), String> {
+        speak_text_with_events(&text, Some(&app))
     }
 
     #[tauri::command]
@@ -427,6 +471,14 @@ pub fn run() {
             let handle = app.handle().clone();
             let _watcher = init_antigravity_watcher(handle.clone(), app_state_clone.clone(), None);
             std::mem::forget(_watcher);
+
+            // Ensure dashboard window starts hidden and main floating window starts visible
+            if let Some(dash) = app.get_webview_window("dashboard") {
+                let _ = dash.hide();
+            }
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.show();
+            }
 
             let app_cmd = handle.clone();
             let state_cmd = app_state_clone.clone();
