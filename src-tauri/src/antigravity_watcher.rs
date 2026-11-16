@@ -143,31 +143,56 @@ pub fn parse_transcript_line(line: &str) -> Option<AntigravityState> {
 
 /// Scans the presence directory for active `.lock` files, returning the session ID of the newest one.
 pub fn find_active_session(presence_dir: &Path) -> Option<String> {
-    if !presence_dir.is_dir() {
-        return None;
-    }
+    let brain_dir = presence_dir.parent().unwrap_or(presence_dir).join("brain");
+    find_active_session_with_brain(presence_dir, &brain_dir)
+}
 
-    let entries = fs::read_dir(presence_dir).ok()?;
+/// Scans the brain directory and presence directory to find the active session.
+/// Prioritizes the session whose `transcript.jsonl` was modified most recently.
+pub fn find_active_session_with_brain(presence_dir: &Path, brain_dir: &Path) -> Option<String> {
     let mut latest_session: Option<(String, SystemTime)> = None;
 
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_file() {
-            if let Some(ext) = path.extension() {
-                if ext == "lock" {
-                    if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+    // 1. First priority: Check brain_dir for most recently updated transcript.jsonl
+    if brain_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(brain_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let transcript = path.join(".system_generated/logs/transcript.jsonl");
+                    if let Ok(meta) = transcript.metadata() {
+                        let mtime = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+                        if let Some(name) = entry.file_name().to_str() {
+                            match &latest_session {
+                                None => latest_session = Some((name.to_string(), mtime)),
+                                Some((_, prev_mtime)) => {
+                                    if mtime > *prev_mtime {
+                                        latest_session = Some((name.to_string(), mtime));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Fallback: Check presence_dir .lock files
+    if latest_session.is_none() && presence_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(presence_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("lock") {
+                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                         let mtime = entry
                             .metadata()
                             .and_then(|m| m.modified())
                             .unwrap_or(SystemTime::UNIX_EPOCH);
-
                         match &latest_session {
-                            None => {
-                                latest_session = Some((file_stem.to_string(), mtime));
-                            }
+                            None => latest_session = Some((stem.to_string(), mtime)),
                             Some((_, prev_mtime)) => {
                                 if mtime > *prev_mtime {
-                                    latest_session = Some((file_stem.to_string(), mtime));
+                                    latest_session = Some((stem.to_string(), mtime));
                                 }
                             }
                         }
@@ -297,7 +322,7 @@ pub fn watch_antigravity_events(
         }
 
         while !stop_flag_clone.load(Ordering::SeqCst) && config.enabled {
-            let active_session = find_active_session(&presence_dir);
+            let active_session = find_active_session_with_brain(&presence_dir, &brain_dir);
 
             if active_session != current_session {
                 current_session = active_session.clone();
