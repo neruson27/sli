@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sli - Desktop Companion</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="sli-container">
+    <!-- Dynamic HUD Dialog Bubble -->
+    <div id="hud-bubble" class="hud-bubble hidden" role="status" aria-live="polite">
+      <div class="hud-header">
+        <span id="hud-badge" class="hud-badge">Sli</span>
+        <span id="hud-status" class="hud-status-dot"></span>
+      </div>
+      <div id="hud-message" class="hud-message"></div>
+    </div>
+
+    <!-- Push-To-Talk Indicator -->
+    <div id="ptt-indicator" class="ptt-indicator hidden">
+      <span class="ptt-dot"></span>
+      <span class="ptt-label">Escuchando...</span>
+    </div>
+
+    <!-- Canvas for 2D Spring-Mass Slime Jelly -->
+    <canvas id="slime-canvas"></canvas>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
