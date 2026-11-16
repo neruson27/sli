@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sli Dashboard</title>
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <!-- Top Island Notch Container -->
+  <div id="dashboard" class="notch-container">
+    <!-- Top Notch Accent Line -->
+    <div class="notch-accent-line"></div>
+
+    <div class="dashboard-body">
+      <!-- Left Sidebar -->
+      <aside class="sidebar">
+        <!-- Brand / Mascot Badge -->
+        <div class="brand-row">
+          <div class="mascot-avatar">💧</div>
+          <div class="brand-info">
+            <span class="brand-title">Sli</span>
+            <span class="brand-status"><span class="status-dot"></span> Sincronizado</span>
+          </div>
+        </div>
+
+        <!-- Vertical Navigation Menu -->
+        <nav class="nav-menu">
+          <button class="nav-item active" data-tab="tab-inicio">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-label">Inicio</span>
+          </button>
+          <button class="nav-item" data-tab="tab-tareas">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">Tareas</span>
+            <span id="nav-task-badge" class="nav-badge">0</span>
+          </button>
+          <button class="nav-item" data-tab="tab-chat">
+            <span class="nav-icon">💬</span>
+            <span class="nav-label">Chat</span>
+          </button>
+          <button class="nav-item" data-tab="tab-sistema">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-label">Sistema</span>
+          </button>
+        </nav>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main class="main-content">
+        <!-- Content Header -->
+        <div class="content-header">
+          <div class="header-titles">
+            <h1 id="view-title" class="view-title">Inicio</h1>
+            <p id="view-subtitle" class="view-subtitle">Resumen de sesión de Gemini & Antigravity</p>
+          </div>
+          <button id="dashboard-close-btn" class="close-notch-btn" title="Cerrar panel (Esc)">✕</button>
+        </div>
+
+        <!-- Quick Input & Voice Bar (always accessible) -->
+        <form id="quick-action-form" class="quick-input-bar">
+          <input 
+            type="text" 
+            id="quick-input" 
+            class="quick-input" 
+            placeholder="Escribe o habla con Sli... (ej: 'abrir terminal', 'estado', 'cambiar pantalla')" 
+            autocomplete="off" 
+          />
+          <button type="submit" class="btn-send" title="Enviar orden">➤</button>
+          <button type="button" id="btn-mic-toggle" class="btn-mic" title="Hablar con Sli (Voz)">🎤</button>
+        </form>
+
+        <!-- Tab 1: Inicio (Status & Summary Cards) -->
+        <div id="tab-inicio" class="tab-pane active">
+          <!-- 3 Big Metric Cards like Troko -->
+          <div class="cards-grid">
+            <!-- Card 1: Modelo Activo -->
+            <div class="metric-card card-cyan">
+              <div class="card-icon-pill icon-cyan">💧</div>
+              <div class="card-metric-val" id="card-model-name">Gemini 3.8 Flash</div>
+              <div class="card-metric-label">Modelo Activo</div>
+            </div>
+
+            <!-- Card 2: Tareas Registradas -->
+            <div class="metric-card card-purple">
+              <div class="card-icon-pill icon-purple">⚡</div>
+              <div class="card-metric-val" id="card-tasks-count">0</div>
+              <div class="card-metric-label">Tareas Registradas</div>
+            </div>
+
+            <!-- Card 3: Tokens Procesados -->
+            <div class="metric-card card-lime">
+              <div class="card-icon-pill icon-lime">📊</div>
+              <div class="card-metric-val" id="card-tokens-count">0</div>
+              <div class="card-metric-label">Tokens Procesados</div>
+            </div>
+          </div>
+
+          <!-- Model Switcher & Quick Controls -->
+          <div class="controls-row">
+            <div class="control-box">
+              <label class="control-label">Cambiar Modelo de IA:</label>
+              <select id="model-select-dropdown" class="control-select">
+                <option value="gemini-3.8-flash">✨ Gemini 3.8 Flash (Recomendado)</option>
+                <option value="gemini-2.5-pro">🧠 Gemini 2.5 Pro (Razonamiento profundo)</option>
+                <option value="claude-3-7-sonnet">⚡ Claude 3.7 Sonnet</option>
+                <option value="claude-3-5-haiku">🐇 Claude 3.5 Haiku</option>
+              </select>
+            </div>
+            <div class="control-actions">
+              <button id="btn-speak-summary" class="action-btn">🗣️ Leer resumen en voz alta</button>
+              <button id="btn-dock-slime" class="action-btn secondary">📌 Alternar acoplamiento de Sli</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Tareas (Detailed list of recent tasks) -->
+        <div id="tab-tareas" class="tab-pane">
+          <div class="pane-toolbar">
+            <span class="toolbar-info">Historial reciente de la sesión activa</span>
+            <button id="btn-refresh-tasks-list" class="btn-refresh" title="Actualizar lista">↻ Actualizar</button>
+          </div>
+          <div id="tasks-scroll-list" class="tasks-scroll-list">
+            <div class="task-loading">Cargando tareas recientes...</div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Chat (Full conversation with Sli) -->
+        <div id="tab-chat" class="tab-pane">
+          <div id="chat-thread" class="chat-thread">
+            <div class="chat-bubble-row sli">
+              <div class="chat-avatar">💧</div>
+              <div class="chat-bubble">¡Hola Neru! Soy Sli. Puedes pedirme abrir programas, cambiar de monitor o consultar tus tareas.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Sistema (Direct system toggles) -->
+        <div id="tab-sistema" class="tab-pane">
+          <div class="system-grid">
+            <div class="system-card">
+              <div class="system-card-header">
+                <span class="system-card-icon">🖥️</span>
+                <span class="system-card-title">Monitores y Pantalla</span>
+              </div>
+              <p class="system-card-desc">Control directo del foco y ventanas en Hyprland.</p>
+              <div class="system-btn-group">
+                <button id="btn-focus-monitor" class="btn-sys">Cambiar foco de monitor (+1)</button>
+              </div>
+            </div>
+
+            <div class="system-card">
+              <div class="system-card-header">
+                <span class="system-card-icon">🚀</span>
+                <span class="system-card-title">Aplicaciones Rápidas</span>
+              </div>
+              <p class="system-card-desc">Lanza procesos locales de manera segura.</p>
+              <div class="system-btn-group">
+                <button id="btn-open-terminal" class="btn-sys">Abrir Terminal</button>
+                <button id="btn-open-browser" class="btn-sys">Abrir Navegador</button>
+              </div>
+            </div>
+
+            <div class="system-card">
+              <div class="system-card-header">
+                <span class="system-card-icon">🔊</span>
+                <span class="system-card-title">Voz Neuronal Offline</span>
+              </div>
+              <p class="system-card-desc">Motor Piper TTS con voz local en español.</p>
+              <div class="system-btn-group">
+                <button id="btn-test-voice" class="btn-sys">Probar síntesis de voz</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>

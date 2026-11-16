@@ -5,7 +5,7 @@ pub mod system_controller;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 use crate::antigravity_watcher::{
     watch_antigravity_events, AntigravityState, WatcherConfig, WatcherHandle,
@@ -20,6 +20,7 @@ pub struct AppState {
     pub antigravity_state: Arc<RwLock<AntigravityState>>,
     pub docked: Arc<AtomicBool>,
     pub recording: Arc<AtomicBool>,
+    pub dashboard_visible: Arc<AtomicBool>,
 }
 
 impl Default for AppState {
@@ -28,6 +29,7 @@ impl Default for AppState {
             antigravity_state: Arc::new(RwLock::new(AntigravityState::Idle)),
             docked: Arc::new(AtomicBool::new(false)),
             recording: Arc::new(AtomicBool::new(false)),
+            dashboard_visible: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -283,6 +285,28 @@ pub mod commands {
     }
 
     #[tauri::command]
+    pub fn toggle_dashboard(
+        app: tauri::AppHandle,
+        state: tauri::State<'_, AppState>,
+    ) -> Result<bool, String> {
+        let current = state.dashboard_visible.load(Ordering::SeqCst);
+        let next = !current;
+        state.dashboard_visible.store(next, Ordering::SeqCst);
+
+        if let Some(win) = app.get_webview_window("dashboard") {
+            if next {
+                let _ = win.show();
+                let _ = win.set_focus();
+            } else {
+                let _ = win.hide();
+            }
+            Ok(next)
+        } else {
+            Err("Dashboard window not found".to_string())
+        }
+    }
+
+    #[tauri::command]
     pub fn set_window_size(window: tauri::Window, width: u32, height: u32) -> Result<(), String> {
         window
             .set_size(tauri::Size::Logical(tauri::LogicalSize {
@@ -379,6 +403,7 @@ pub fn run() {
             get_active_session_summary,
             chat_with_sli,
             speak_text,
+            toggle_dashboard,
             set_window_size,
             dispatch_screen_action,
             toggle_dock,
@@ -387,8 +412,39 @@ pub fn run() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
-            let _watcher = init_antigravity_watcher(handle, app_state_clone, None);
+            let _watcher = init_antigravity_watcher(handle.clone(), app_state_clone.clone(), None);
             std::mem::forget(_watcher);
+
+            let app_cmd = handle.clone();
+            let state_cmd = app_state_clone.clone();
+            std::thread::spawn(move || {
+                let fifo_path = "/tmp/sli.fifo";
+                let _ = std::fs::remove_file(fifo_path);
+                let _ = std::process::Command::new("mkfifo").arg(fifo_path).status();
+                use std::io::BufRead;
+                loop {
+                    if let Ok(file) = std::fs::File::open(fifo_path) {
+                        let reader = std::io::BufReader::new(file);
+                        for line in reader.lines().flatten() {
+                            let trimmed = line.trim();
+                            if trimmed == "toggle_dashboard" || trimmed == "dashboard" {
+                                let current = state_cmd.dashboard_visible.load(Ordering::SeqCst);
+                                let next = !current;
+                                state_cmd.dashboard_visible.store(next, Ordering::SeqCst);
+                                if let Some(win) = app_cmd.get_webview_window("dashboard") {
+                                    if next {
+                                        let _ = win.show();
+                                        let _ = win.set_focus();
+                                    } else {
+                                        let _ = win.hide();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())
