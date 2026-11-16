@@ -294,65 +294,74 @@ export class SlimeEntity {
   }
 
   /**
-   * Draw glossy jelly gradient body
+   * Draw glossy jelly gradient body with Rimuru Tempest's signature azure blue translucence
    */
   drawBody(ctx) {
     ctx.save();
     this.traceOutline(ctx);
 
-    // Radial gradient for 3D translucent liquid volume
+    // Radial gradient for 3D translucent liquid volume in Rimuru azure blue
     const gradX = this.x - this.radius * 0.2;
     const gradY = this.y - this.radius * 0.25;
     const grad = ctx.createRadialGradient(
       gradX,
       gradY,
-      this.radius * 0.1,
+      this.radius * 0.08,
       this.x,
       this.y,
       this.radius * 1.25
     );
 
-    grad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
-    grad.addColorStop(0.7, 'rgba(241, 245, 255, 0.94)');
-    grad.addColorStop(1, 'rgba(224, 231, 255, 0.88)');
+    // Rimuru Tempest translucent sky blue palette
+    grad.addColorStop(0, 'rgba(218, 244, 255, 0.98)');
+    grad.addColorStop(0.35, 'rgba(155, 218, 255, 0.96)');
+    grad.addColorStop(0.72, 'rgba(110, 188, 250, 0.93)');
+    grad.addColorStop(1, 'rgba(72, 162, 242, 0.90)');
 
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Subtle edge rim stroke
-    ctx.strokeStyle = 'rgba(203, 213, 225, 0.75)';
-    ctx.lineWidth = 1.8;
+    // Subtle edge rim stroke in darker anime blue
+    ctx.strokeStyle = 'rgba(59, 130, 246, 0.75)';
+    ctx.lineWidth = 2.0;
     ctx.stroke();
 
     ctx.restore();
   }
 
   /**
-   * Draw anime specular highlights
+   * Draw anime specular highlights (Rimuru's glossy crescent liquid reflection)
    */
   drawHighlights(ctx) {
     if (this.state === 'docked') return;
 
     ctx.save();
-    // Primary glossy highlight on top-left shoulder
+
+    // 1. Primary glossy curved crescent reflection on top
     ctx.beginPath();
-    const hx = this.x - this.radius * 0.38;
-    const hy = this.y - this.radius * 0.42;
-    ctx.ellipse(hx, hy, this.radius * 0.28, this.radius * 0.14, -Math.PI / 6, 0, Math.PI * 2);
+    const hx = this.x - this.radius * 0.32;
+    const hy = this.y - this.radius * 0.40;
+    ctx.ellipse(hx, hy, this.radius * 0.32, this.radius * 0.14, -Math.PI / 5.5, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
     ctx.fill();
 
-    // Tiny secondary accent droplet
+    // 2. Secondary lower rim shine / translucency reflection
     ctx.beginPath();
-    ctx.arc(hx - 8, hy + 12, 3, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.arc(hx - 8, hy + 14, 3.2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+    ctx.fill();
+
+    // 3. Subtle bottom inner glow highlight
+    ctx.beginPath();
+    ctx.ellipse(this.x + this.radius * 0.2, this.y + this.radius * 0.48, this.radius * 0.35, this.radius * 0.09, 0.2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
     ctx.fill();
 
     ctx.restore();
   }
 
   /**
-   * Draw eyes, cheeks, and expressive mouth
+   * Draw Rimuru Tempest's facial features (iconic angled slit eyes, blush, sweatdrop, mouth)
    */
   drawFace(ctx) {
     ctx.save();
@@ -365,27 +374,32 @@ export class SlimeEntity {
     const lookX = (dx / dist) * Math.min(dist * 0.08, maxLook);
     const lookY = (dy / dist) * Math.min(dist * 0.08, maxLook);
 
-    const eyeSpacing = this.state === 'docked' ? 24 : 16;
-    const eyeOffsetY = this.state === 'docked' ? -2 : -2;
+    const eyeSpacing = this.state === 'docked' ? 24 : 17;
+    const eyeOffsetY = this.state === 'docked' ? -1 : -1;
 
     const leftEyeX = this.x - eyeSpacing + lookX;
     const rightEyeX = this.x + eyeSpacing + lookX;
     const eyeY = this.y + eyeOffsetY + lookY;
 
-    // 1. Blush cheeks
-    this.drawBlush(ctx, leftEyeX - 6, rightEyeX + 6, eyeY + 9);
+    // 1. Blush cheeks (Rimuru pink ovals)
+    this.drawBlush(ctx, leftEyeX - 6, rightEyeX + 6, eyeY + 10);
 
-    // 2. Eyes
+    // 2. Sweatdrop when thinking or busy (iconic anime expression)
+    if (this.state === 'thinking' || this.state === 'alert') {
+      this.drawSweatdrop(ctx, rightEyeX + 16, eyeY - 14);
+    }
+
+    // 3. Eyes (Rimuru signature angled line slits)
     if (this.state === 'docked') {
       this.drawHappyClosedEyes(ctx, leftEyeX, rightEyeX, eyeY);
     } else if (this.isBlinking) {
       this.drawBlinkingEyes(ctx, leftEyeX, rightEyeX, eyeY);
     } else {
-      this.drawOpenEyes(ctx, leftEyeX, rightEyeX, eyeY, lookX, lookY);
+      this.drawRimuruEyes(ctx, leftEyeX, rightEyeX, eyeY, lookX, lookY);
     }
 
-    // 3. Mouth
-    this.drawMouth(ctx, this.x + lookX * 0.6, eyeY + 8);
+    // 4. Mouth
+    this.drawMouth(ctx, this.x + lookX * 0.6, eyeY + 9);
 
     ctx.restore();
   }
@@ -395,16 +409,94 @@ export class SlimeEntity {
    */
   drawBlush(ctx, lx, rx, y) {
     ctx.save();
-    const blushAlpha = this.state === 'speaking' || this.state === 'alert' ? 0.6 : 0.4;
-    ctx.fillStyle = `rgba(244, 63, 94, ${blushAlpha})`;
+    const blushAlpha = this.state === 'speaking' || this.state === 'alert' ? 0.65 : 0.45;
+    ctx.fillStyle = `rgba(244, 114, 182, ${blushAlpha})`;
 
     ctx.beginPath();
-    ctx.ellipse(lx, y, 6.5, 3.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(lx, y, 7.0, 3.8, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.beginPath();
-    ctx.ellipse(rx, y, 6.5, 3.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(rx, y, 7.0, 3.8, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
+  }
+
+  /**
+   * Draw Rimuru Tempest's signature angled line eyes (\ /) with expression tick marks
+   */
+  drawRimuruEyes(ctx, lx, rx, y, lookX, lookY) {
+    ctx.save();
+    const eyeColor = '#1e293b'; // Deep slate blue/black
+    ctx.strokeStyle = eyeColor;
+    ctx.fillStyle = eyeColor;
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const isAlert = this.state === 'alert';
+    const isThinking = this.state === 'thinking';
+
+    // Slant geometry: \ /
+    const slantW = isAlert ? 9 : 8;
+    const slantH = isAlert ? 6 : 5;
+
+    // Left eye: \ (starts higher on the left, goes down towards center)
+    ctx.beginPath();
+    ctx.moveTo(lx - slantW * 0.7, y - slantH * 0.6);
+    ctx.lineTo(lx + slantW * 0.6, y + slantH * 0.6);
+    ctx.stroke();
+
+    // Left double tick accents (\ \)
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(lx - slantW * 0.35, y - slantH * 0.9);
+    ctx.lineTo(lx + slantW * 0.15, y - slantH * 0.2);
+    ctx.stroke();
+
+    // Right eye: / (starts higher on the right, goes down towards center)
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.moveTo(rx + slantW * 0.7, y - slantH * 0.6);
+    ctx.lineTo(rx - slantW * 0.6, y + slantH * 0.6);
+    ctx.stroke();
+
+    // Right double tick accents (/ /)
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(rx + slantW * 0.35, y - slantH * 0.9);
+    ctx.lineTo(rx - slantW * 0.15, y - slantH * 0.2);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /**
+   * Draw iconic anime sweatdrop for thinking/overwhelmed state
+   */
+  drawSweatdrop(ctx, sx, sy) {
+    ctx.save();
+    const bob = Math.sin(this.time * 6) * 1.5;
+    const y = sy + bob;
+
+    ctx.beginPath();
+    ctx.moveTo(sx, y - 6);
+    ctx.bezierCurveTo(sx + 5, y - 1, sx + 5, y + 5, sx, y + 5);
+    ctx.bezierCurveTo(sx - 5, y + 5, sx - 5, y - 1, sx, y - 6);
+    ctx.closePath();
+
+    ctx.fillStyle = 'rgba(96, 165, 250, 0.92)'; // Bright sky blue teardrop
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(37, 99, 235, 0.75)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Highlight dot on sweatdrop
+    ctx.beginPath();
+    ctx.arc(sx - 1.2, y + 1, 1.2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.fill();
+
     ctx.restore();
   }
 
